@@ -1,0 +1,61 @@
+name: Test and publish image
+
+# Every line of work lives on a branch wasm-artcraft/v<N> (the same name in every ORISO repo
+# that takes part) and publishes the image tag wasm-artcraft-v<N>.
+on:
+  push:
+    branches: ['wasm-artcraft/**', 'main']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      wordcraft_tag: { description: 'WordCraft release tag (latest if empty)', required: false }
+      gridcraft_tag: { description: 'GridCraft release tag (latest if empty)', required: false }
+      pdfcraft_tag: { description: 'PdfCraft release tag (latest if empty)', required: false }
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm test
+      - name: Browser test (stand-in editors)
+        run: |
+          npm install --no-save playwright@1
+          npx playwright install --with-deps chromium
+          node test/browser.mjs
+
+  image:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image tag from the branch
+        id: tag
+        # Image names must be lowercase (the owner is "Storypapst").
+        run: |
+          echo "tag=$(echo '${{ github.ref_name }}' | tr '/' '-')" >> "$GITHUB_OUTPUT"
+          echo "owner=$(echo '${{ github.repository_owner }}' | tr 'A-Z' 'a-z')" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: ghcr.io/${{ steps.tag.outputs.owner }}/oriso-wasm-artcraft:${{ steps.tag.outputs.tag }}
+          build-args: |
+            WORDCRAFT_TAG=${{ inputs.wordcraft_tag || 'latest' }}
+            GRIDCRAFT_TAG=${{ inputs.gridcraft_tag || 'latest' }}
+            PDFCRAFT_TAG=${{ inputs.pdfcraft_tag || 'latest' }}
+          # Avoids GitHub API rate limits when the build looks up the releases.
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}

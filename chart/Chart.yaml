@@ -1,0 +1,6 @@
+apiVersion: v2
+name: oriso-wasm-artcraft
+description: ORISO add-on that edits Word, Excel and PDF files beside the chat with WordCraft, GridCraft and PdfCraft (WebAssembly)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

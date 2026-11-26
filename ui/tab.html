@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- An editor of the wasm-artcraft add-on in its own browser tab. Opened by the panel
+     (ui/entry.js, "In neuem Tab öffnen"); gets the document from it and sends every save back,
+     so versions land in the panel's Ablage and nothing is downloaded. -->
+<html lang="de">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>ORISO · Dokument</title>
+	<style>
+		html, body { margin: 0; height: 100%; background: #f0edee; font: 14px Poppins, system-ui, sans-serif; color: #1a1c1e; }
+		iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; }
+		#note { position: fixed; inset: 0; display: grid; place-content: center; padding: 24px; text-align: center; }
+		#note[hidden] { display: none; }
+	</style>
+</head>
+<body>
+	<div id="note" hidden></div>
+	<script type="module" src="./tab.js"></script>
+</body>
+</html>
