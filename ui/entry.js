@@ -281,6 +281,16 @@ class Panel {
 		this.onMessage = (event) => this.message(event);
 		this.onChipDrop = (event) => this.chipDrop(event);
 		this.onResize = () => this.placeLarge();
+		// Bumped when the chat changes or the panel unmounts: reads that finish later belong to
+		// another case and are dropped instead of opened (see `current`).
+		this.generation = 0;
+	}
+
+	/** Resolves to the value of `read`, or to null if the chat changed while it ran. */
+	async current(read) {
+		const generation = this.generation;
+		const value = await read;
+		return generation === this.generation ? value : null;
 	}
 
 	get t() {
@@ -306,7 +316,9 @@ class Panel {
 			onchange: async () => {
 				const file = this.input.files?.[0];
 				this.input.value = '';
-				if (file) await this.open({ name: file.name, bytes: await file.arrayBuffer() });
+				if (!file) return;
+				const bytes = await this.current(file.arrayBuffer());
+				if (bytes) await this.open({ name: file.name, bytes });
 			}
 		});
 		this.list = el('ul');
@@ -472,7 +484,7 @@ class Panel {
 			// The chat's own drop zone listens on the window; this drop is ours.
 			event.stopPropagation();
 			try {
-				const dropped = await readDrop(event.dataTransfer);
+				const dropped = await this.current(readDrop(event.dataTransfer));
 				if (dropped) await this.open(dropped);
 			} catch {
 				this.say(this.t.unreadable, 'error');
@@ -606,7 +618,10 @@ class Panel {
 						el('button', {
 							type: 'button',
 							text: t.reopen,
-							onclick: async () => this.open({ name: file.name, bytes: await file.arrayBuffer() })
+							onclick: async () => {
+								const bytes = await this.current(file.arrayBuffer());
+								if (bytes) await this.open({ name: file.name, bytes });
+							}
 						})
 					)
 				);
@@ -674,6 +689,7 @@ class Panel {
 		const otherCase = props.sessionId !== this.props.sessionId;
 		this.props = props;
 		if (otherCase) {
+			this.generation += 1;
 			// Versions saved for one chat must not be dropped into another by mistake.
 			if (this.dirty) this.say(this.t.leftDirty, 'warning');
 			this.versions = [];
@@ -688,6 +704,7 @@ class Panel {
 	}
 
 	unmount() {
+		this.generation += 1;
 		window.removeEventListener('message', this.onMessage);
 		window.removeEventListener('drop', this.onChipDrop, true);
 		this.leaveLarge();

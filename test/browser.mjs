@@ -135,6 +135,30 @@ try {
 		await page.waitForFunction(() => window.notices.some((n) => n.type === 'warning' && n.text.includes('tool.exe')));
 	});
 
+	await step('a file still being read when the chat changes is not opened in the new chat', async () => {
+		await page.evaluate(() => {
+			const read = Blob.prototype.arrayBuffer;
+			window.originalRead = read;
+			window.releaseRead = null;
+			Blob.prototype.arrayBuffer = function () {
+				return new Promise((ok) => {
+					window.releaseRead = () => ok(read.call(this));
+				});
+			};
+		});
+		await page.click('.wac-head button[aria-label="Werkzeuge"]').catch(() => {});
+		await page.setInputFiles('.wac input[type=file]', { name: 'Fall-eins.docx', mimeType: '', buffer: Buffer.from('case one') });
+		await page.waitForFunction(() => typeof window.releaseRead === 'function');
+		await page.evaluate(() => window.addon.update({ ...window.addonProps, sessionId: 3 }));
+		await page.evaluate(() => window.releaseRead());
+		await page.waitForTimeout(300);
+		assert.equal(await page.locator('.wac iframe').count(), 0, 'no editor opened');
+		await page.locator('.wac-menu').waitFor();
+		await page.evaluate(() => {
+			Blob.prototype.arrayBuffer = window.originalRead;
+		});
+	});
+
 	await step('another chat clears the Ablage, so nothing is dropped into the wrong case', async () => {
 		await page.evaluate(() => window.addon.update({ ...window.addonProps, sessionId: 2 }));
 		assert.equal(await page.locator('.wac-chip').count(), 0);
