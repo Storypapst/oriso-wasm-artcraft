@@ -75,7 +75,13 @@ function send(res, status, text, type = 'text/plain; charset=utf-8') {
 }
 
 export function handler(req, res) {
-	const { pathname } = new URL(req.url, 'http://addon');
+	let pathname;
+	try {
+		({ pathname } = new URL(req.url, 'http://addon'));
+	} catch {
+		// A malformed request target (e.g. `//[`) must fail this request, not the process.
+		return send(res, 400, 'bad request');
+	}
 	const head = req.method === 'HEAD';
 	if (req.method !== 'GET' && !head) {
 		return send(res, 405, 'method not allowed');

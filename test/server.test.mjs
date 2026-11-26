@@ -55,6 +55,17 @@ test('never serves files outside ui/', async () => {
 	}
 });
 
+test('answers a malformed request target with 400 and keeps serving', async () => {
+	const { request } = await import('node:http');
+	const status = await new Promise((ok, fail) => {
+		const req = request({ host: '127.0.0.1', port: server.address().port, path: '//[' }, (res) => ok(res.statusCode));
+		req.on('error', fail);
+		req.end();
+	});
+	assert.equal(status, 400);
+	assert.equal((await fetch(`${base}/health`)).status, 200);
+});
+
 test('has no API and refuses writes', async () => {
 	assert.equal((await fetch(`${base}/api/anything`)).status, 404);
 	assert.equal((await fetch(`${base}/ui/entry.js`, { method: 'POST', body: 'x' })).status, 405);
