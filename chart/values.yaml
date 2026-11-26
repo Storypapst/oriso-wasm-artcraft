@@ -1,0 +1,18 @@
+# Install into the add-on namespace the AddonService watches (ORISO-Helm addonService.discovery.namespace):
+#   helm upgrade --install wasm-artcraft ./chart -n addons
+image:
+  repository: ghcr.io/storypapst/oriso-wasm-artcraft
+  # One tag per branch line: wasm-artcraft-v1, wasm-artcraft-v2, ... A tag of the form
+  # sha256:<digest> pins by digest.
+  tag: wasm-artcraft-v1
+  pullPolicy: Always
+imagePullSecrets: []
+replicas: 1
+# Namespace of the ORISO release, where the AddonService runs. Only it may reach the add-on.
+orisoNamespace: caritas
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    memory: 192Mi

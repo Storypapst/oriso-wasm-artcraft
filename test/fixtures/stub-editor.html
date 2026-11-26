@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- Stand-in for a Craft web build in tests: speaks the same postMessage bridge
+     (`<app>:ready|open|save|dirty`) as WordCraft, GridCraft and PdfCraft. -->
+<html lang="en">
+<head><meta charset="utf-8"><title>stub</title></head>
+<body>
+	<p id="state">waiting</p>
+	<button id="edit">edit</button>
+	<button id="save">save</button>
+	<script>
+		const app = location.pathname.split('/').at(-2);
+		const params = new URLSearchParams(location.search);
+		let doc = null;
+		const post = (msg) => parent.postMessage(msg, location.origin);
+		addEventListener('message', (e) => {
+			if (e.source !== parent || e.data?.type !== app + ':open') return;
+			doc = { name: e.data.name, text: new TextDecoder().decode(e.data.bytes) };
+			document.getElementById('state').textContent = `opened ${doc.name}: ${doc.text} by ${params.get('author')}`;
+		});
+		document.getElementById('edit').onclick = () => {
+			doc = doc ?? { name: app === 'gridcraft' ? 'Tabelle.xlsx' : 'Dokument.docx', text: '' };
+			doc.text += ' +edit';
+			post({ type: app + ':dirty', dirty: true });
+		};
+		document.getElementById('save').onclick = () => {
+			const bytes = new TextEncoder().encode(doc.text).buffer;
+			post({ type: app + ':save', name: doc.name, saveAs: false, bytes });
+			post({ type: app + ':dirty', dirty: false });
+		};
+		post({ type: app + ':ready', version: 'stub' });
+	</script>
+</body>
+</html>

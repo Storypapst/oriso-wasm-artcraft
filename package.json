@@ -1,0 +1,15 @@
+{
+	"name": "oriso-wasm-artcraft",
+	"version": "0.1.0",
+	"private": true,
+	"description": "ORISO add-on: edit Word, Excel and PDF files beside the chat with the ArtCraft Crafting Apps (WordCraft, GridCraft, PdfCraft) as WebAssembly",
+	"license": "MIT",
+	"type": "module",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"start": "node src/server.mjs",
+		"test": "node --test test/*.test.mjs"
+	}
+}

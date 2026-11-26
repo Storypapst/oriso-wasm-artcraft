@@ -1,0 +1,58 @@
+<!doctype html>
+<!-- A stand-in for the ORISO web app: a chat with the web app's drop zone (class
+     dragAndDropArea, as in ORISO-Frontend DragAndDropArea.tsx), a decrypted attachment
+     (a blob: download link, as AttachmentCard renders it), and the add-on panel. -->
+<html lang="de">
+<head><meta charset="utf-8"><title>host</title>
+<style>
+	body { margin: 0; display: grid; grid-template-columns: 1fr 460px; height: 100vh; font: 14px system-ui; }
+	#chat { border-right: 1px solid #ccc; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+	.dragAndDropArea { flex: 1; border: 2px dashed #999; padding: 8px; }
+	#panel { padding: 8px; }
+</style></head>
+<body>
+	<section id="chat">
+		<a id="attachment" download="Antrag &amp; Co.docx">Antrag &amp; Co.docx</a>
+		<div class="dragAndDropArea" id="composer">Composer drop zone</div>
+		<ol id="composerFiles"></ol>
+	</section>
+	<section id="panel" style="display:flex;flex-direction:column"></section>
+	<script type="module">
+		const link = document.getElementById('attachment');
+		link.href = URL.createObjectURL(new Blob(['original text'], { type: 'application/octet-stream' }));
+		const composer = document.getElementById('composer');
+		window.received = [];
+		composer.addEventListener('dragover', (e) => e.preventDefault());
+		composer.addEventListener('drop', async (e) => {
+			e.preventDefault();
+			const file = e.dataTransfer.files[0];
+			if (!file) return;
+			window.received.push({ name: file.name, type: file.type, text: await file.text() });
+			document.getElementById('composerFiles').append(Object.assign(document.createElement('li'), { textContent: file.name }));
+		});
+		window.notices = [];
+		const mod = await import('/ui/entry.js');
+		const props = {
+			contract: 'oriso-addon/v1',
+			domElement: document.getElementById('panel'),
+			addon: { name: 'wasm-artcraft', version: '0.1.0' },
+			app: { id: 'office' },
+			slot: 'consultant.session',
+			user: { id: 'u1', username: 'Beraterin Test', roles: ['consultant'] },
+			tenant: {},
+			locale: 'de',
+			informal: false,
+			theme: {},
+			sessionId: 1,
+			api: () => Promise.reject(new Error('no api')),
+			navigate: () => {},
+			notify: (n) => window.notices.push(n)
+		};
+		window.addonProps = props;
+		window.addon = mod;
+		await mod.bootstrap(props);
+		await mod.mount(props);
+		window.mounted = true;
+	</script>
+</body>
+</html>

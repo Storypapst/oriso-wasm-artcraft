@@ -1,0 +1,21 @@
+# Only the AddonService talks to this add-on; it needs no outbound traffic at all.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: wasm-artcraft
+spec:
+  podSelector:
+    matchLabels:
+      app: wasm-artcraft
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.orisoNamespace }}
+          podSelector:
+            matchLabels:
+              app: addonservice
+      ports:
+        - port: 8080
+  egress: []
