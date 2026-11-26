@@ -559,6 +559,11 @@ class Panel {
 	 * downloaded. Needs a saved state: unsaved edits live only inside this editor.
 	 */
 	openInTab() {
+		// One tab per document: a second click brings the running one forward.
+		if (this.tab && !this.tab.closed) {
+			this.tab.focus();
+			return;
+		}
 		if (this.dirty) {
 			this.say(this.t.saveFirst, 'warning');
 			return;

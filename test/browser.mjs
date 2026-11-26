@@ -141,6 +141,11 @@ try {
 		const tabFrame = tab.frameLocator('iframe');
 		await tabFrame.locator('#state').filter({ hasText: 'opened Antrag & Co.docx: original text +edit +edit' }).waitFor();
 		assert.match(await page.textContent('.wac-away'), /eigenen Tab/);
+		// A second click brings the same tab forward instead of orphaning it with a second one.
+		const pagesBefore = page.context().pages().length;
+		await page.click('.wac-head button[aria-label="In neuem Tab öffnen"]');
+		await page.waitForTimeout(300);
+		assert.equal(page.context().pages().length, pagesBefore, 'no second tab');
 		assert.equal(await page.locator('.wac-stage iframe').count(), 0, 'no second editor in the panel');
 		await tabFrame.locator('#edit').click();
 		await tabFrame.locator('#save').click();
