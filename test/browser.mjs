@@ -81,15 +81,32 @@ try {
 		assert.ok(notices.some((n) => n.type === 'success' && /Version 2 von „Antrag & Co.docx“/.test(n.text) && /Ziehen Sie/.test(n.text)));
 	});
 
-	await step('the large window keeps the document and leaves the chat free on the left', async () => {
-		await page.click('.wac-head button[aria-label="Großes Fenster"]');
-		const box = await page.locator('.wac').boundingBox();
-		assert.ok(box.x >= 380, `window starts at ${box.x}`);
-		assert.ok(box.width > 700, `window is ${box.width} wide`);
-		assert.ok(box.y >= 0 && box.y + box.height <= 900, `window ${box.y}..${box.y + box.height} fits the 900px screen`);
+	await step('three sizes: beside the chat leaves it free, full screen covers it, Esc steps back', async () => {
+		await page.click('.wac-head button[aria-label="Neben dem Chat"]');
+		let box = await page.locator('.wac').boundingBox();
+		assert.ok(box.x >= 380, `beside the chat starts at ${box.x}`);
+		assert.ok(box.width > 700 && box.y >= 0 && box.y + box.height <= 900, `beside the chat: ${JSON.stringify(box)}`);
+		await page.click('.wac-head button[aria-label="Vollbild"]');
+		box = await page.locator('.wac').boundingBox();
+		assert.ok(box.x <= 16 && box.width >= 1360 && box.y + box.height <= 900, `full screen: ${JSON.stringify(box)}`);
+		assert.equal(await page.getAttribute('.wac-head button[aria-label="Vollbild"]', 'aria-pressed'), 'true');
 		assert.match(await frame().locator('#state').textContent(), /opened Antrag & Co.docx/, 'editor was not reloaded');
-		await page.click('.wac-head button[aria-label="Zurück ins Seitenpanel"]');
-		assert.equal(await page.locator('.wac.large').count(), 0);
+		await page.keyboard.press('Escape');
+		assert.equal(await page.locator('.wac.wide').count(), 1, 'Esc: full screen → beside the chat');
+		await page.keyboard.press('Escape');
+		assert.equal(await page.locator('.wac.wide, .wac.full').count(), 0, 'Esc: beside the chat → side panel');
+	});
+
+	await step('zoom scales the editor and is remembered per program', async () => {
+		await page.click('.wac-head button[aria-label="Vergrößern"]');
+		assert.equal(await page.textContent('.wac-zoom'), '110 %');
+		assert.match(await page.getAttribute('.wac iframe', 'style'), /scale\(1\.1\)/);
+		await page.click('.wac-head button[aria-label="Verkleinern"]');
+		await page.click('.wac-head button[aria-label="Verkleinern"]');
+		assert.equal(await page.textContent('.wac-zoom'), '90 %');
+		assert.equal(await page.evaluate(() => localStorage.getItem('wac.zoom.wordcraft')), '0.9');
+		await page.click('.wac-zoom');
+		assert.equal(await page.textContent('.wac-zoom'), '100 %');
 	});
 
 	await step('the newest version dragged into the chat arrives as a .docx with both edits', async () => {
@@ -103,8 +120,39 @@ try {
 		});
 	});
 
+	await step('starting to drag a version out of full screen shrinks the window so the chat is free', async () => {
+		await page.click('.wac-head button[aria-label="Vollbild"]');
+		// The drop itself is covered above; here only the panel's reaction to a drag start.
+		await page.evaluate(() => {
+			const chip = document.querySelector('.wac-chip');
+			chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: new DataTransfer() }));
+			chip.dispatchEvent(new DragEvent('dragend', { bubbles: true }));
+		});
+		assert.equal(await page.locator('.wac.wide').count(), 1);
+		await page.keyboard.press('Escape');
+	});
+
+	await step('"In neuem Tab öffnen" moves the document to a tab whose saves land in the Ablage', async () => {
+		const [tab] = await Promise.all([
+			page.context().waitForEvent('page'),
+			page.click('.wac-head button[aria-label="In neuem Tab öffnen"]')
+		]);
+		await tab.waitForLoadState();
+		const tabFrame = tab.frameLocator('iframe');
+		await tabFrame.locator('#state').filter({ hasText: 'opened Antrag & Co.docx: original text +edit +edit' }).waitFor();
+		assert.match(await page.textContent('.wac-away'), /eigenen Tab/);
+		assert.equal(await page.locator('.wac-stage iframe').count(), 0, 'no second editor in the panel');
+		await tabFrame.locator('#edit').click();
+		await tabFrame.locator('#save').click();
+		await page.locator('.wac-chip-meta').filter({ hasText: /^Version 3 · / }).waitFor();
+		await tab.close();
+		await page.locator('.wac-stage iframe').waitFor();
+		await frame().locator('#state').filter({ hasText: '+edit +edit +edit' }).waitFor();
+	});
+
 	await step('"In Chat legen" hands over an older version from the keyboard', async () => {
-		await page.focus('.wac-chip >> nth=1 >> button:has-text("In Chat legen")');
+		const versionOne = page.locator('.wac-chip').filter({ hasText: /Version 1 · / });
+		await versionOne.locator('button:has-text("In Chat legen")').focus();
 		await page.keyboard.press('Enter');
 		await page.waitForFunction(() => window.received.length === 2);
 		assert.equal((await page.evaluate(() => window.received))[1].text, 'original text +edit');

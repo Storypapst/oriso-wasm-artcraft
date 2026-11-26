@@ -4,7 +4,8 @@
  * The web app shows this app as a button in the case header, next to the call buttons
  * (slot consultant.session), and in the chat menu. It opens a side panel with:
  *  - a smart menu: Text (WordCraft), Tabelle (GridCraft), PDF (PdfCraft), "Datei öffnen";
- *  - the editor, which can grow into a large window over the right part of the screen;
+ *  - the editor in three sizes (side panel, beside the chat, full screen), with zoom, or in its
+ *    own tab (ui/tab.html) whose saves come back here;
  *  - the Ablage: every save becomes a version the person drags (or puts) into the chat.
  *
  * The editors run as WebAssembly in an iframe below this add-on's /ui/craft/ path, on the web
@@ -38,8 +39,12 @@ const ICONS = {
 	pdfcraft:
 		'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M9.5 17.5c2-4.5 3-7 3-8.5 0-1-1-1-1 0 0 2.5 3.5 6 6 6.5"/></svg>',
 	back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>',
-	grow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6l-6 6 6 6M15 6l6 6-6 6"/></svg>',
-	shrink: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6l6 6-6 6M21 6l-6 6 6 6"/></svg>'
+	panel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>',
+	wide: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16"/></svg>',
+	full: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+	zoomOut: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 12h12"/></svg>',
+	zoomIn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 12h12M12 6v12"/></svg>',
+	tab: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M14 4h6v6M20 4l-8 8"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>'
 };
 
 const TEXTS = {
@@ -56,8 +61,16 @@ const TEXTS = {
 				: 'Zieh einen Anhang aus dem Chat auf ein Werkzeug (vorher „Prüfen“ bzw. „Entschlüsseln“ klicken).',
 		dropHere: 'Hier ablegen, um zu öffnen',
 		back: 'Werkzeuge',
-		grow: 'Großes Fenster',
-		shrink: 'Zurück ins Seitenpanel',
+		modes: { panel: 'Seitenpanel', wide: 'Neben dem Chat', full: 'Vollbild' },
+		modesLabel: 'Größe',
+		zoomOut: 'Verkleinern',
+		zoomIn: 'Vergrößern',
+		zoomReset: 'Zoom zurücksetzen',
+		tab: 'In neuem Tab öffnen',
+		tabRunning: (name) => `„${name}“ ist in einem eigenen Tab geöffnet. Was Sie dort speichern, landet hier in der Ablage.`,
+		tabBack: 'Hier weiterarbeiten',
+		tabBlocked: 'Der Browser hat den neuen Tab blockiert. Bitte Pop-ups für ORISO erlauben.',
+		saveFirst: 'Bitte zuerst speichern (Strg+S), dann im neuen Tab öffnen.',
 		tray: 'Ablage',
 		trayHint: (f) => (f ? 'Jedes Speichern legt hier eine Version ab. Ziehen Sie sie in den Chat.' : 'Jedes Speichern legt hier eine Version ab. Zieh sie in den Chat.'),
 		trayEmpty: 'Noch nichts gespeichert. Im Programm mit Strg+S oder „Datei › Speichern“ speichern.',
@@ -95,8 +108,16 @@ const TEXTS = {
 		hint: () => 'Drag an attachment from the chat onto a tool (click “Check” or “Decrypt” on it first).',
 		dropHere: 'Drop here to open',
 		back: 'Tools',
-		grow: 'Large window',
-		shrink: 'Back into the side panel',
+		modes: { panel: 'Side panel', wide: 'Beside the chat', full: 'Full screen' },
+		modesLabel: 'Size',
+		zoomOut: 'Zoom out',
+		zoomIn: 'Zoom in',
+		zoomReset: 'Reset zoom',
+		tab: 'Open in a new tab',
+		tabRunning: (name) => `“${name}” is open in its own tab. What you save there lands here in Saved.`,
+		tabBack: 'Work here again',
+		tabBlocked: 'The browser blocked the new tab. Allow pop-ups for ORISO.',
+		saveFirst: 'Save first (Ctrl+S), then open it in a new tab.',
 		tray: 'Saved',
 		trayHint: () => 'Every save puts a version here. Drag it into the chat.',
 		trayEmpty: 'Nothing saved yet. Save in the program with Ctrl+S or “File › Save”.',
@@ -229,7 +250,7 @@ const STYLE = `
 .wac-tray-head b { font-weight: 600; font-size: 13px; }
 .wac-tray-head small { font-size: 12px; color: var(--m3-on-surface-variant, #444748); }
 .wac-tray ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; }
-.wac.large .wac-tray ul { max-height: 132px; }
+.wac.wide .wac-tray ul, .wac.full .wac-tray ul { max-height: 132px; }
 .wac-empty { font-size: 12px; color: var(--m3-on-surface-variant, #444748); }
 .wac-chip { display: grid; grid-template-columns: 32px 1fr auto; gap: 10px; align-items: center; padding: 7px 8px; border-radius: 12px;
   background: var(--m3-surface-container-high, #eae7e8); cursor: grab; border: 1px solid transparent; }
@@ -246,9 +267,21 @@ const STYLE = `
 .wac-chip-actions button { border: 1px solid var(--m3-outline, #747878); background: transparent; border-radius: 99px; padding: 3px 10px; font-size: 11px; }
 .wac-privacy { margin: 0; font-size: 11px; color: var(--m3-on-surface-variant, #444748); }
 .wac-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-.wac.large { position: fixed; z-index: 1000; padding: 16px 18px; border-radius: 28px; min-height: 0; height: auto; overflow: hidden;
+.wac-tools { display: flex; align-items: center; gap: 2px; flex: none; }
+.wac-seg { display: flex; border: 1px solid var(--m3-outline-variant, #c4c7c8); border-radius: 999px; padding: 2px; }
+.wac-seg .wac-icon { width: 32px; height: 32px; }
+.wac-seg .wac-icon[aria-pressed="true"] { background: var(--m3-secondary-container, #dde1ff); }
+.wac-zoom { font-size: 12px; min-width: 44px; text-align: center; border: 0; background: transparent; padding: 4px; border-radius: 8px;
+  font-variant-numeric: tabular-nums; }
+.wac-zoom:hover { background: var(--m3-surface-container, #f0edee); }
+.wac-sep { width: 1px; height: 22px; background: var(--m3-outline-variant, #c4c7c8); margin: 0 4px; }
+.wac-stage iframe { transform-origin: 0 0; }
+.wac-away { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; padding: 24px; text-align: center; }
+.wac-away button { justify-self: center; border: 0; border-radius: 99px; padding: 8px 18px; font-weight: 500;
+  background: var(--m3-primary, #a5000a); color: var(--m3-on-primary, #fff); }
+.wac.wide, .wac.full { position: fixed; z-index: 1000; padding: 16px 18px; border-radius: 28px; min-height: 0; height: auto; overflow: hidden;
   box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 12px 32px rgba(60,10,10,.18); border: 1px solid var(--m3-outline-variant, #c4c7c8); }
-@media (max-width: 760px) { .wac.large { inset: 0 !important; width: auto !important; border-radius: 0; } }
+@media (max-width: 760px) { .wac.wide, .wac.full { inset: 0 !important; width: auto !important; border-radius: 0; } }
 @media (prefers-reduced-motion: reduce) { .wac * { transition: none !important; } }
 `;
 
@@ -274,13 +307,17 @@ class Panel {
 		this.file = null; // name of the open document
 		this.pending = null; // { name, bytes } waiting for the editor's ready message
 		this.dirty = false;
-		this.large = false;
+		this.mode = 'panel'; // 'panel' | 'wide' (beside the chat) | 'full'
+		this.zoom = 1;
+		this.source = null; // { name, bytes } of the open document: what was opened or last saved
+		this.tab = null; // the window of "Open in a new tab", while it runs
+		this.onKey = (event) => this.key(event);
 		this.versions = []; // { file, version, time }, newest first
 		this.ownDrag = null;
 		this.dragDepth = 0;
 		this.onMessage = (event) => this.message(event);
 		this.onChipDrop = (event) => this.chipDrop(event);
-		this.onResize = () => this.placeLarge();
+		this.onResize = () => this.place();
 		// Bumped when the chat changes or the panel unmounts: reads that finish later belong to
 		// another case and are dropped instead of opened (see `current`).
 		this.generation = 0;
@@ -339,7 +376,7 @@ class Panel {
 	renderBody() {
 		const t = this.t;
 		if (!this.editor) {
-			this.leaveLarge();
+			this.setMode('panel');
 			const menu = el(
 				'div',
 				{ class: 'wac-menu', role: 'group', 'aria-label': t.menuLabel },
@@ -362,11 +399,22 @@ class Panel {
 			return;
 		}
 		this.stateBadge = el('span', { class: 'wac-state' });
-		this.growButton = el('button', {
-			type: 'button',
-			class: 'wac-icon',
-			onclick: () => (this.large ? this.leaveLarge() : this.enterLarge())
-		});
+		const icon = (name, label, onclick, extra = {}) =>
+			el('button', { type: 'button', class: 'wac-icon', 'aria-label': label, title: label, html: ICONS[name], onclick, ...extra });
+		this.modeButtons = ['panel', 'wide', 'full'].map((mode) =>
+			icon(mode, t.modes[mode], () => this.setMode(mode), { 'data-mode': mode })
+		);
+		this.zoomLabel = el('button', { type: 'button', class: 'wac-zoom', title: t.zoomReset, 'aria-label': t.zoomReset, onclick: () => this.setZoom(1) });
+		const tools = el(
+			'div',
+			{ class: 'wac-tools' },
+			icon('zoomOut', t.zoomOut, () => this.stepZoom(-1)),
+			this.zoomLabel,
+			icon('zoomIn', t.zoomIn, () => this.stepZoom(1)),
+			el('span', { class: 'wac-sep', 'aria-hidden': 'true' }),
+			el('div', { class: 'wac-seg', role: 'group', 'aria-label': t.modesLabel }, ...this.modeButtons),
+			icon('tab', t.tab, () => this.openInTab())
+		);
 		const head = el(
 			'div',
 			{ class: 'wac-head' },
@@ -378,13 +426,25 @@ class Panel {
 				el('small', { text: `${t.editors[this.editor.id]} · ${t.engines[this.editor.id].split(' · ')[0]}` })
 			),
 			this.stateBadge,
-			this.growButton
+			tools
 		);
 		this.stage = el('div', { class: 'wac-stage' }, el('div', { class: 'wac-drop', text: t.dropHere }));
-		if (this.frame) this.stage.append(this.frame);
+		if (this.tab) {
+			this.stage.append(
+				el(
+					'div',
+					{ class: 'wac-away' },
+					el('p', { text: t.tabRunning(this.file || t.editors[this.editor.id]) }),
+					el('button', { type: 'button', text: t.tabBack, onclick: () => this.backFromTab() })
+				)
+			);
+		} else if (this.frame) {
+			this.stage.append(this.frame);
+		}
 		this.body.replaceChildren(head, this.stage);
 		this.syncState();
-		this.syncGrow();
+		this.syncModes();
+		this.applyZoom();
 	}
 
 	syncState(savedVersion) {
@@ -402,42 +462,155 @@ class Panel {
 		}
 	}
 
-	syncGrow() {
-		if (!this.growButton) return;
-		const label = this.large ? this.t.shrink : this.t.grow;
-		this.growButton.innerHTML = this.large ? ICONS.shrink : ICONS.grow;
-		this.growButton.setAttribute('aria-label', label);
-		this.growButton.title = label;
-		this.growButton.setAttribute('aria-pressed', String(this.large));
+	syncModes() {
+		for (const button of this.modeButtons ?? []) {
+			button.setAttribute('aria-pressed', String(button.dataset.mode === this.mode));
+		}
 	}
 
 	/**
-	 * The large window: the panel's own box becomes a fixed window over the right part of the
-	 * screen (the iframe is not moved, so the editor keeps its document). The chat keeps
-	 * CHAT_MIN_WIDTH on the left, so files can still be dragged into it.
+	 * Sizes: the side panel, a window beside the chat (the chat keeps CHAT_MIN_WIDTH on the left,
+	 * so files can be dragged into it) and nearly full screen. The panel's own box becomes the
+	 * fixed window; the iframe is not moved, so the editor keeps its document.
 	 */
-	enterLarge() {
-		this.large = true;
-		this.box.classList.add('large');
-		this.placeLarge();
-		window.addEventListener('resize', this.onResize);
-		this.syncGrow();
+	setMode(mode) {
+		if (mode === this.mode) return;
+		this.mode = mode;
+		this.box.classList.toggle('wide', mode === 'wide');
+		this.box.classList.toggle('full', mode === 'full');
+		if (mode === 'panel') {
+			for (const side of ['top', 'bottom', 'right', 'left']) this.box.style[side] = '';
+			window.removeEventListener('resize', this.onResize);
+		} else {
+			this.place();
+			window.addEventListener('resize', this.onResize);
+		}
+		this.syncModes();
 	}
 
-	placeLarge() {
-		if (!this.large) return;
-		const panel = this.props.domElement.getBoundingClientRect();
-		const left = Math.max(CHAT_MIN_WIDTH, Math.min(panel.left, window.innerWidth - 980));
-		Object.assign(this.box.style, { top: '16px', bottom: '16px', right: '16px', left: `${left}px` });
+	place() {
+		if (this.mode === 'full') {
+			Object.assign(this.box.style, { top: '12px', bottom: '12px', right: '12px', left: '12px' });
+		} else if (this.mode === 'wide') {
+			const panel = this.props.domElement.getBoundingClientRect();
+			const left = Math.max(CHAT_MIN_WIDTH, Math.min(panel.left, window.innerWidth - 980));
+			Object.assign(this.box.style, { top: '16px', bottom: '16px', right: '16px', left: `${left}px` });
+		}
 	}
 
-	leaveLarge() {
-		if (!this.large) return;
-		this.large = false;
-		this.box.classList.remove('large');
-		for (const side of ['top', 'bottom', 'right', 'left']) this.box.style[side] = '';
-		window.removeEventListener('resize', this.onResize);
-		this.syncGrow();
+	/** Esc steps down one size: full screen, beside the chat, side panel. */
+	key(event) {
+		if (event.key !== 'Escape' || this.mode === 'panel' || event.defaultPrevented) return;
+		event.preventDefault();
+		this.setMode(this.mode === 'full' ? 'wide' : 'panel');
+	}
+
+	// ---------- zoom ----------
+
+	static ZOOMS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+
+	zoomKey() {
+		return `wac.zoom.${this.editor?.id ?? 'none'}`;
+	}
+
+	loadZoom() {
+		try {
+			const value = Number(localStorage.getItem(this.zoomKey()));
+			this.zoom = Panel.ZOOMS.includes(value) ? value : 1;
+		} catch {
+			this.zoom = 1;
+		}
+	}
+
+	stepZoom(direction) {
+		const steps = Panel.ZOOMS;
+		const index = steps.findIndex((z) => z >= this.zoom - 1e-9);
+		const next = steps[Math.min(steps.length - 1, Math.max(0, (index < 0 ? steps.length - 1 : index) + direction))];
+		this.setZoom(next);
+	}
+
+	setZoom(zoom) {
+		this.zoom = zoom;
+		try {
+			localStorage.setItem(this.zoomKey(), String(zoom));
+		} catch {
+			// Not remembered then; the zoom still applies.
+		}
+		this.applyZoom();
+	}
+
+	/** The editor draws at a larger or smaller CSS size and is scaled to fit the stage. */
+	applyZoom() {
+		if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.zoom * 100)} %`;
+		if (!this.frame) return;
+		const z = this.zoom;
+		Object.assign(this.frame.style, {
+			width: `${100 / z}%`,
+			height: `${100 / z}%`,
+			transform: z === 1 ? '' : `scale(${z})`
+		});
+	}
+
+	// ---------- new tab ----------
+
+	/**
+	 * Moves the document into its own tab (ui/tab.html). The tab hosts the same editor and
+	 * sends every save back here, so versions still land in the Ablage and nothing is
+	 * downloaded. Needs a saved state: unsaved edits live only inside this editor.
+	 */
+	openInTab() {
+		if (this.dirty) {
+			this.say(this.t.saveFirst, 'warning');
+			return;
+		}
+		const url = new URL('tab.html', new URL('..', this.base));
+		url.searchParams.set('app', this.editor.id);
+		const author = this.props.user?.username;
+		if (author) url.searchParams.set('author', author);
+		const tab = window.open(url.href, '_blank');
+		if (!tab) {
+			this.say(this.t.tabBlocked, 'warning');
+			return;
+		}
+		this.tab = tab;
+		this.frame?.remove();
+		this.frame = null;
+		this.setMode('panel');
+		this.renderBody();
+	}
+
+	closeTab() {
+		try {
+			this.tab?.close();
+		} catch {
+			// Already closed.
+		}
+		this.tab = null;
+	}
+
+	backFromTab() {
+		try {
+			this.tab?.close();
+		} catch {
+			// Already closed.
+		}
+		this.tab = null;
+		this.start(this.editor, this.source);
+	}
+
+	/** Messages from the tab: hello (send the document), saved (a new version), closed. */
+	tabMessage(data) {
+		if (data.type === 'wac:hello') {
+			if (this.source) {
+				const bytes = this.source.bytes.slice(0);
+				this.tab.postMessage({ type: 'wac:doc', name: this.source.name, bytes }, location.origin, [bytes]);
+			}
+		} else if (data.type === 'wac:saved' && data.bytes) {
+			this.addVersion(data.name || this.file || 'Dokument', data.bytes);
+		} else if (data.type === 'wac:closed') {
+			this.tab = null;
+			this.start(this.editor, this.source);
+		}
 	}
 
 	backToMenu() {
@@ -514,6 +687,8 @@ class Panel {
 		this.editor = editor;
 		this.file = file?.name ?? null;
 		this.pending = file;
+		this.source = file ? { name: file.name, bytes: file.bytes.slice(0) } : null;
+		this.loadZoom();
 		this.setDirty(false);
 		const src = new URL(`${editor.id}/index.html`, this.base);
 		if (src.origin !== location.origin) {
@@ -533,6 +708,10 @@ class Panel {
 	}
 
 	message(event) {
+		if (this.tab && event.source === this.tab && event.origin === location.origin) {
+			this.tabMessage(event.data ?? {});
+			return;
+		}
 		if (!this.frame || event.source !== this.frame.contentWindow || event.origin !== location.origin) return;
 		const data = event.data ?? {};
 		const [app, kind] = String(data.type ?? '').split(':');
@@ -562,6 +741,7 @@ class Panel {
 		const file = new File([bytes], name, { type: chatType(name) ?? 'application/octet-stream' });
 		const version = this.versions.filter((v) => v.file.name === name).length + 1;
 		this.versions.unshift({ file, version, time: clock(this.props.locale) });
+		this.source = { name, bytes: bytes.slice(0) };
 		this.file = name;
 		this.dirty = false;
 		this.syncState(version);
@@ -596,6 +776,8 @@ class Panel {
 						'aria-label': `${file.name}, ${meta}`,
 						ondragstart: (event) => {
 							this.ownDrag = file;
+							// The chat is under the full-screen window: make room for the drop.
+							if (this.mode === 'full') this.setMode('wide');
 							event.dataTransfer.effectAllowed = 'copy';
 							event.dataTransfer.items.add(file);
 							event.dataTransfer.setData('text/plain', file.name);
@@ -647,7 +829,7 @@ class Panel {
 			for (const type of ['dragenter', 'dragover', 'drop']) {
 				target.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: transfer }));
 			}
-			if (this.large && window.matchMedia('(max-width: 760px)').matches) this.leaveLarge();
+			if (this.mode !== 'panel' && window.matchMedia('(max-width: 760px)').matches) this.setMode('panel');
 			this.say(this.t.inChat, 'info');
 		} catch {
 			this.say(this.t.noChatDrop, 'warning');
@@ -682,6 +864,7 @@ class Panel {
 		forgetRecentFiles();
 		window.addEventListener('message', this.onMessage);
 		window.addEventListener('drop', this.onChipDrop, true);
+		window.addEventListener('keydown', this.onKey);
 		this.render();
 	}
 
@@ -690,6 +873,8 @@ class Panel {
 		this.props = props;
 		if (otherCase) {
 			this.generation += 1;
+			// A tab opened for the previous case must not keep feeding this one.
+			this.closeTab();
 			// Versions saved for one chat must not be dropped into another by mistake.
 			if (this.dirty) this.say(this.t.leftDirty, 'warning');
 			this.versions = [];
@@ -699,7 +884,7 @@ class Panel {
 			this.editor = null;
 			this.file = null;
 			this.dirty = false;
-			this.leaveLarge();
+			this.setMode('panel');
 			this.render();
 		}
 	}
@@ -708,7 +893,9 @@ class Panel {
 		this.generation += 1;
 		window.removeEventListener('message', this.onMessage);
 		window.removeEventListener('drop', this.onChipDrop, true);
-		this.leaveLarge();
+		window.removeEventListener('keydown', this.onKey);
+		this.closeTab();
+		this.setMode('panel');
 		if (this.dirty) this.say(this.t.leftDirty, 'warning');
 		this.frame?.remove();
 		this.versions = [];

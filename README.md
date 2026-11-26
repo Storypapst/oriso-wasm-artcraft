@@ -25,6 +25,7 @@ upload, which encrypts attachments end to end.
 | Open | Drag a decrypted chat attachment (or a file) onto a tool. The panel reads its bytes from the browser (the attachment is a `blob:` link) and opens the matching editor: `.docx` → WordCraft, `.xlsx` → GridCraft, `.pdf` → PdfCraft. |
 | Edit | The editor runs in an iframe under `/service/addons/wasm-artcraft/ui/craft/<app>/` on the web app's origin, which its `postMessage` bridge requires. Comments and tracked changes carry the user's name (`?author=`). |
 | Save | Save in the editor sends the file to the panel (`<app>:save`). Every save becomes a version in the **Ablage** (name, version, time). **Großes Fenster** grows the editor over the right part of the screen and leaves the chat free on the left. |
+| Sizes | Side panel, **beside the chat** (the chat keeps 380 px on the left) and **full screen**; Esc steps back one size. Dragging a version out of full screen shrinks the window so the chat can take the drop. **Zoom** (− / % / +) scales the editor and is remembered per program. **In neuem Tab öffnen** moves the document into its own tab (`ui/tab.html`); every save there still lands in the Ablage, nothing is downloaded. |
 | Pass on | Drag the chip into the chat (or press **In den Chat legen**). It lands in the message field like a dropped file; **Senden** uploads it encrypted. The next person opens it the same way. |
 
 Work is sequential: one person edits, saves and passes the file on. There is no simultaneous
