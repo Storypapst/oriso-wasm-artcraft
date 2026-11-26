@@ -693,6 +693,7 @@ class Panel {
 			// Versions saved for one chat must not be dropped into another by mistake.
 			if (this.dirty) this.say(this.t.leftDirty, 'warning');
 			this.versions = [];
+			forgetRecentFiles();
 			this.frame?.remove();
 			this.frame = null;
 			this.editor = null;

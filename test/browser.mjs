@@ -159,8 +159,10 @@ try {
 		});
 	});
 
-	await step('another chat clears the Ablage, so nothing is dropped into the wrong case', async () => {
+	await step('another chat clears the Ablage and the editors\' recent-file lists', async () => {
+		await page.evaluate(() => localStorage.setItem('gridcraft.ui', JSON.stringify({ recent: ['Fall-eins.xlsx'] })));
 		await page.evaluate(() => window.addon.update({ ...window.addonProps, sessionId: 2 }));
+		assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('gridcraft.ui'))), { recent: [] });
 		assert.equal(await page.locator('.wac-chip').count(), 0);
 		await page.locator('.wac-menu').waitFor();
 	});

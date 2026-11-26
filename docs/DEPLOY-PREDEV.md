@@ -76,6 +76,8 @@ in `addons` and set `imagePullSecrets` in the chart.
 git clone -q --branch wasm-artcraft/v1 https://github.com/Storypapst/oriso-wasm-artcraft /root/oriso-wasm-artcraft \
   || git -C /root/oriso-wasm-artcraft pull -q
 helm upgrade --install wasm-artcraft /root/oriso-wasm-artcraft/chart -n addons
+# A new build reuses the tag wasm-artcraft-v1; pullPolicy Always only pulls when a Pod starts:
+kubectl -n addons rollout restart deploy/wasm-artcraft
 kubectl -n addons rollout status deploy/wasm-artcraft
 ```
 
