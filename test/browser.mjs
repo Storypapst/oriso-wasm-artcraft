@@ -150,6 +150,41 @@ try {
 		await frame().locator('#state').filter({ hasText: '+edit +edit +edit' }).waitFor();
 	});
 
+	await step('leaving a tab for the tools menu detaches it; closing it later does not break the panel', async () => {
+		const [tab] = await Promise.all([
+			page.context().waitForEvent('page'),
+			page.click('.wac-head button[aria-label="In neuem Tab öffnen"]')
+		]);
+		await tab.waitForLoadState();
+		await page.click('.wac-head button[aria-label="Werkzeuge"]');
+		await page.locator('.wac-menu').waitFor();
+		await tab.close().catch(() => {});
+		await page.waitForTimeout(300);
+		assert.equal(await page.locator('.wac-menu').count(), 1, 'the menu stays');
+		assert.deepEqual(errors, [], 'no error in the panel');
+		await page.click('.wac-tile[data-editor=wordcraft]');
+		await frame().locator('#state').waitFor();
+		assert.equal(await page.locator('.wac-away').count(), 0, 'the new editor is not hidden behind a tab notice');
+	});
+
+	await step('"Hier weiterarbeiten" asks before dropping unsaved edits made in the tab', async () => {
+		await page.click('.wac-head button[aria-label="Werkzeuge"]');
+		await page.locator('.wac-chip').filter({ hasText: /Version 3 · / }).locator('button:has-text("Öffnen")').click();
+		await frame().locator('#state').filter({ hasText: 'opened' }).waitFor();
+		const [tab] = await Promise.all([
+			page.context().waitForEvent('page'),
+			page.click('.wac-head button[aria-label="In neuem Tab öffnen"]')
+		]);
+		await tab.waitForLoadState();
+		await tab.frameLocator('iframe').locator('#state').filter({ hasText: 'opened' }).waitFor();
+		await tab.frameLocator('iframe').locator('#edit').click();
+		await page.locator('.wac-state.dirty').waitFor();
+		const before = confirms;
+		await page.click('.wac-away button');
+		assert.equal(confirms, before + 1, 'asked before discarding');
+		await frame().locator('#state').filter({ hasText: 'opened' }).waitFor();
+	});
+
 	await step('"In Chat legen" hands over an older version from the keyboard', async () => {
 		const versionOne = page.locator('.wac-chip').filter({ hasText: /Version 1 · / });
 		await versionOne.locator('button:has-text("In Chat legen")').focus();
@@ -161,8 +196,9 @@ try {
 	await step('back to the tools asks before dropping unsaved changes', async () => {
 		await frame().locator('#edit').click();
 		await page.locator('.wac-state.dirty').waitFor();
+		const before = confirms;
 		await page.click('.wac-head button[aria-label="Werkzeuge"]');
-		assert.equal(confirms, 1);
+		assert.equal(confirms, before + 1);
 		await page.locator('.wac-menu').waitFor();
 	});
 

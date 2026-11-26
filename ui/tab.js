@@ -26,6 +26,11 @@ if (!APPS.includes(app) || !panel) {
 
 	let doc = null; // { name, bytes } from the panel
 	let ready = false;
+	let dirty = false;
+	// Closing the tab with unsaved edits asks first, as the panel does for its own editor.
+	window.addEventListener('beforeunload', (event) => {
+		if (dirty && !window.wacReleased) event.preventDefault();
+	});
 	const toEditor = () => {
 		if (!doc || !ready) return;
 		const bytes = doc.bytes.slice(0);
@@ -51,7 +56,11 @@ if (!APPS.includes(app) || !panel) {
 			ready = true;
 			toEditor();
 		} else if (kind === 'save' && data.bytes) {
+			dirty = false;
 			panel.postMessage({ type: 'wac:saved', name: data.name, bytes: data.bytes }, location.origin, [data.bytes]);
+		} else if (kind === 'dirty') {
+			dirty = Boolean(data.dirty);
+			panel.postMessage({ type: 'wac:dirty', dirty }, location.origin);
 		} else if (kind === 'failed') {
 			show(`Das Programm konnte nicht starten (${data.error ?? ''}). Es braucht WebGL2 oder WebGPU.`);
 		}

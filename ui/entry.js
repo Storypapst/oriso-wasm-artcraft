@@ -581,6 +581,8 @@ class Panel {
 
 	closeTab() {
 		try {
+			// The person already decided about unsaved edits here; the tab must not ask again.
+			if (this.tab) this.tab.wacReleased = true;
 			this.tab?.close();
 		} catch {
 			// Already closed.
@@ -589,12 +591,8 @@ class Panel {
 	}
 
 	backFromTab() {
-		try {
-			this.tab?.close();
-		} catch {
-			// Already closed.
-		}
-		this.tab = null;
+		// Edits made in the tab since its last save are only in the tab.
+		if (!this.confirmDiscard()) return;
 		this.start(this.editor, this.source);
 	}
 
@@ -607,14 +605,19 @@ class Panel {
 			}
 		} else if (data.type === 'wac:saved' && data.bytes) {
 			this.addVersion(data.name || this.file || 'Dokument', data.bytes);
+		} else if (data.type === 'wac:dirty') {
+			this.setDirty(Boolean(data.dirty));
 		} else if (data.type === 'wac:closed') {
+			// The person closed the tab (it asked them about unsaved edits itself).
 			this.tab = null;
-			this.start(this.editor, this.source);
+			this.dirty = false;
+			if (this.editor) this.start(this.editor, this.source);
 		}
 	}
 
 	backToMenu() {
 		if (!this.confirmDiscard()) return;
+		this.closeTab();
 		this.frame?.remove();
 		this.frame = null;
 		this.editor = null;
@@ -683,6 +686,8 @@ class Panel {
 
 	/** Starts an editor afresh (a new iframe) and hands it `file` once it says it is ready. */
 	start(editor, file) {
+		// A tab belongs to the document it was opened for; a new document ends it.
+		this.closeTab();
 		this.frame?.remove();
 		this.editor = editor;
 		this.file = file?.name ?? null;
